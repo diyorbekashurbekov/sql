@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Деректер қоры | Info__ubt Интерактивті 3D Симуляторы</title>
+    <!-- Google Fonts: Syne & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <style>
+        /* 21dev cyber design tokens */
+        :root {
+            --bg-deep: #020204;
+            --bg-base: #060609;
+            --bg-elevated: rgba(10, 10, 18, 0.75);
+            --surface: rgba(255, 255, 255, 0.04);
+            --surface-hover: rgba(255, 255, 255, 0.07);
+
+            --accent: #8b5cf6; /* Cyber Violet */
+            --accent-cyan: #06b6d4; /* Cyber Cyan */
+            --accent-pink: #ec4899; /* Laser Pink */
+            --accent-glow: rgba(139, 92, 246, 0.35);
+            --accent-cyan-glow: rgba(6, 182, 212, 0.35);
+
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+
+            --foreground: #f3f4f6;
+            --foreground-muted: #9ca3af;
+            --border: rgba(255, 255, 255, 0.07);
+            --border-highlight: rgba(139, 92, 246, 0.25);
+
+            --radius: 16px;
+            --radius-sm: 8px;
+            --font-sans: 'Outfit', sans-serif;
+            --font-display: 'Syne', sans-serif;
+            --easing: cubic-bezier(0.16, 1, 0.3, 1);
+            --transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--foreground);
+            font-family: var(--font-sans);
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Isometric grid background */
+        .cyber-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                    linear-gradient(rgba(255, 255, 255, 0.01) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -2;
+            pointer-events: none;
+        }
+
+        .cyber-grid::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle 800px at 50% 50%, rgba(6, 6, 9, 0) 30%, var(--bg-deep) 90%);
+        }
+
+        /* Ambient scanline layers */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                    rgba(18, 16, 16, 0) 50%,
+                    rgba(0, 0, 0, 0.25) 50__
+            );
+            background-size: 100% 4px;
+            z-index: 10;
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        /* Moving light blobs */
+        .ambient-blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(140px);
+            z-index: -1;
+            opacity: 0.12;
+            pointer-events: none;
+            mix-blend-mode: screen;
+        }
+
+        .blob-1 {
+            width: 60vw;
+            height: 60vw;
+            background: radial-gradient(circle, var(--accent) 0%, rgba(139, 92, 246, 0) 70%);
+            top: -20vh;
+            left: -10vw;
+            animation: float-blob-1 25s infinite alternate ease-in-out;
+        }
+
+        .blob-2 {
+            width: 50vw;
+            height: 50vw;
+            background: radial-gradient(circle, var(--accent-cyan) 0%, rgba(6, 182, 212, 0) 70%);
+            bottom: -10vh;
+            right: -10vw;
+            animation: float-blob-2 20s infinite alternate ease-in-out;
+        }
+
+        @keyframes float-blob-1 {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(8vw, 8vh) scale(1.1); }
+        }
+
+        @keyframes float-blob-2 {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(-5vw, -8vh) scale(0.95); }
+        }
+
+        /* Overlay for audio consent */
+        .intro-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-deep);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+
+        .intro-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .intro-content {
+            max-width: 650px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: rgba(6, 6, 9, 0.85);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 50px rgba(139, 92, 246, 0.15);
+        }
+
+        .channel-tag {
+            font-family: var(--font-display);
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: 0.15rem;
+            background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent) 50%, var(--accent-pink) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+            text-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+        }
+
+        .intro-title {
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            margin-bottom: 16px;
+            letter-spacing: 0.05rem;
+            text-transform: uppercase;
+        }
+
+        .intro-desc {
+            color: var(--foreground-muted);
+            font-size: 1.05rem;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px 28px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-sans);
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+            outline: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn-cyber {
+            background: linear-gradient(135deg, var(--accent) 0%, #6d28d9 100%);
+            color: white;
+            box-shadow: 0 0 20px var(--accent-glow);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-cyber:hover {
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.6);
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--foreground);
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.02);
+            border-color: var(--border-highlight);
+            color: var(--accent-cyan);
+        }
+
+        /* App Header */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 4%;
+            background: rgba(2, 2, 4, 0.8);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            z-index: 20;
+            position: sticky;
+            top: 0;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-logo {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: 0.1rem;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-badge {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.25);
+            color: var(--accent-cyan);
+            padding: 3px 8px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            font-weight: bold;
+            letter-spacing: 0.05rem;
+        }
+
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .mute-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .mute-btn:hover {
+            color: var(--accent-cyan);
+        }
+
+        /* App Layout */
+        .app-layout {
+            display: grid;
+            grid-template-columns: 1fr 1.3fr;
+            gap: 24px;
+            padding: 24px 4%;
+            flex-grow: 1;
+            align-items: start;
+        }
+
+        /* Panels */
+        .panel {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .glass-card {
+            background: var(--bg-elevated);
+            backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+        }
+
+        /* Controls sidebar card */
+        .sql-card {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card-title {
+            font-family: var(--font-display);
+            font-size: 1.35rem;
+            letter-spacing: 0.05rem;
+            border-left: 3px solid var(--accent);
+            padding-left: 10px;
+            margin-bottom: 4px;
+        }
+
+        .panel-desc {
+            color: var(--foreground-muted);
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .sql-presets {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .preset-btn {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            color: var(--foreground-muted);
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            text-align: left;
+            transition: var(--transition);
+        }
+
+        .preset-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border-color: var(--border-highlight);
+        }
+
+        .preset-btn.active {
+            background: rgba(139, 92, 246, 0.12);
+            border-color: var(--accent);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.15);
+            font-weight: bold;
+        }
+
+        .audio-settings {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 14px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+
+        .slider-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.85rem;
+            color: var(--foreground-muted);
+        }
+
+        .slider-item label {
+            width: 100px;
+        }
+
+        .slider-item input[type="range"] {
+            flex-grow: 1;
+            -webkit-appearance: none;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.08);
+            outline: none;
+        }
+
+        .slider-item input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .slider-item input[type="range"]::-webkit-slider-thumb:hover {
+            box-shadow: 0 0 8px var(--accent-cyan);
+            background: white;
+        }
+
+        /* 3D Database schema viewport */
+        .db-viewport {
+            width: 100%;
+            background: #020205;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            padding: 24px;
+            min-height: 480px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            perspective: 1200px; /* Enable 3D */
+            overflow: hidden;
+        }
+
+        /* Custom connection line SVG overlay */
+        .svg-connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .glowing-line {
+            stroke: var(--accent-cyan);
+            stroke-width: 2;
+            stroke-dasharray: 6, 6;
+            animation: dash 15s linear infinite;
+            filter: drop-shadow(0 0 4px var(--accent-cyan));
+            opacity: 0.6;
+        }
+
+        .glowing-line-pink {
+            stroke: var(--accent-pink);
+            stroke-width: 2;
+            stroke-dasharray: 6, 6;
+            animation: dash 15s linear infinite;
+            filter: drop-shadow(0 0 4px var(--accent-pink));
+            opacity: 0.6;
+        }
+
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -1000;
+            }
+        }
+
+        /* 3D Relational Tables Styling */
+        .db-tables-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            transform-style: preserve-3d;
+            transform: rotateX(20deg) rotateY(-5deg); /* Default Isometric 3D angle */
+            transition: transform 0.1s ease-out;
+            z-index: 2;
+        }
+
+        .db-table-card {
+            background: rgba(10, 10, 16, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            transform-style: preserve-3d;
+            transition: box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+
+        .db-table-card:hover {
+            border-color: rgba(6, 182, 212, 0.3);
+            box-shadow: 0 15px 40px rgba(6, 182, 212, 0.15);
+        }
+
+        .db-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        .db-table-title {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .db-grid {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            text-align: left;
+        }
+
+        .db-grid th {
+            color: var(--foreground-muted);
+            font-weight: 600;
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .db-grid td {
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            color: #d1d5db;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .db-grid tr.row-selected td {
+            background-color: rgba(6, 182, 212, 0.15);
+            color: var(--accent-cyan);
+            font-weight: bold;
+            border-bottom-color: rgba(6, 182, 212, 0.3);
+        }
+
+        .key-icon {
+            font-size: 0.75rem;
+            color: var(--warning);
+            margin-right: 4px;
+        }
+
+        /* SQL Resultset table overlay */
+        .sql-results-card {
+            background: rgba(10, 10, 20, 0.9);
+            border: 1px solid var(--border-highlight);
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.2);
+            margin-top: 10px;
+            animation: result-fade 0.5s ease-out forwards;
+        }
+
+        @keyframes result-fade {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Terminal styling */
+        .terminal-log {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.65);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--success);
+            min-height: 70px;
+            max-height: 90px;
+            overflow-y: auto;
+            border-left: 3px solid var(--success);
+        }
+
+        /* Theory Tabs */
+        .theory-tabs {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--foreground-muted);
+            font-family: var(--font-sans);
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: white;
+        }
+
+        .tab-btn.active {
+            color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.05);
+            border: 1px solid rgba(6, 182, 212, 0.15);
+        }
+
+        .theory-pane {
+            display: none;
+            animation: pane-fade 0.4s var(--easing) forwards;
+        }
+
+        .theory-pane.active {
+            display: block;
+        }
+
+        @keyframes pane-fade {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .pane-desc {
+            font-size: 0.9rem;
+            color: var(--foreground-muted);
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .theory-details {
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            font-size: 0.8rem;
+        }
+
+        .theory-details h4 {
+            color: var(--accent-cyan);
+            margin-bottom: 8px;
+        }
+
+        .theory-details ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .theory-details li {
+            margin-bottom: 6px;
+            color: var(--foreground-muted);
+        }
+
+        .theory-details li strong {
+            color: white;
+        }
+
+        /* Quiz card styling */
+        .quiz-card {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .quiz-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .quiz-title {
+            font-family: var(--font-display);
+            font-size: 1.15rem;
+        }
+
+        .quiz-score {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .quiz-score span {
+            color: var(--accent-cyan);
+        }
+
+        .quiz-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .quiz-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-cyan) 100%);
+            width: 0%;
+            transition: width 0.4s ease;
+        }
+
+        .quiz-body {
+            min-height: 200px;
+        }
+
+        .q-text {
+            font-size: 0.95rem;
+            font-weight: 600;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .opt-btn {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            color: var(--foreground);
+            font-family: var(--font-sans);
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            text-align: left;
+            cursor: pointer;
+            transition: var(--transition);
+            outline: none;
+        }
+
+        .opt-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--border-highlight);
+            transform: translateX(4px);
+        }
+
+        .opt-btn.correct {
+            background: rgba(16, 185, 129, 0.12) !important;
+            border-color: var(--success) !important;
+            color: #a7f3d0;
+        }
+
+        .opt-btn.incorrect {
+            background: rgba(239, 68, 68, 0.12) !important;
+            border-color: var(--error) !important;
+            color: #fca5a5;
+            animation: shake 0.4s ease;
+        }
+
+        .opt-btn.disabled {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .opt-btn.disabled.correct, .opt-btn.disabled.incorrect {
+            opacity: 1;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+
+        .quiz-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 12px;
+        }
+
+        /* Footer styling */
+        .app-footer {
+            border-top: 1px solid var(--border);
+            padding: 20px 4%;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--foreground-muted);
+            margin-top: auto;
+            background: rgba(2, 2, 4, 0.9);
+        }
+
+        /* Responsive styling */
+        @media (max-width: 1024px) {
+            .app-layout {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .db-viewport {
+                min-height: 520px;
+                padding: 12px;
+            }
+            .db-tables-container {
+                transform: rotateX(10deg) rotateY(-2deg) scale(0.9);
+            }
+        }
+    </style>
+</head>
+<body>
+<!-- Background grids & Scanlines -->
+<div class="cyber-grid"></div>
+<div class="scanlines"></div>
+
+<!-- Ambient Blobs -->
+<div class="ambient-blob blob-1"></div>
+<div class="ambient-blob blob-2"></div>
+
+<!-- Audio consent entrance screen -->
+<div id="intro-overlay" class="intro-overlay">
+    <div class="intro-content">
+        <div class="channel-tag">INFO__UBT</div>
+        <h1 class="intro-title">Деректер қоры симуляторы</h1>
+        <p class="intro-desc">ҰБТ Информатика пәніне арналған реляциялық деректер қорының құрылымы, бастапқы/сыртқы кілттер байланысы және интерактивті SQL сұраныс орындалуын көрсететін визуалды 3D платформа.</p>
+        <button id="enter-btn" class="btn btn-cyber">
+            <span>Симуляторды іске қосу (Дыбысты қосу)</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-database"><path d="M3 5V19c0 2.2 4 4 9 4s9-1.8 9-4V5"/><path d="M3 5c0 2.2 4 4 9 4s9-1.8 9-4"/><path d="M3 12c0 2.2 4 4 9 4s9-1.8 9-4"/></svg>
+        </button>
+    </div>
+</div>
+
+<!-- App Header -->
+<header class="app-header">
+    <div class="header-brand">
+        <span class="brand-logo">INFO__UBT</span>
+        <span class="brand-badge">ДЕРЕКТЕР ҚОРЫ</span>
+    </div>
+    <div class="audio-controls">
+        <button id="copy-code-btn" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; gap: 6px;" title="Сайт кодын көшіру">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            <span>Кодты көшіру</span>
+        </button>
+        <button id="mute-btn" class="mute-btn" title="Дыбысты өшіру">
+            <svg id="vol-on" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+            <svg id="vol-off" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-x hidden"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/></svg>
+        </button>
+    </div>
+</header>
+
+<!-- App Content Layout -->
+<main class="app-layout">
+    <!-- Left Panel: SQL Console & Theory -->
+    <section class="panel left-panel">
+        <!-- SQL presets playground -->
+        <div class="glass-card sql-card">
+            <h3 class="card-title">SQL Сұраныс Консолі</h3>
+            <p class="panel-desc">Сұранысты таңдап, кестелердегі деректердің қалай таңдалып шығатынын (SELECT) бақылаңыз:</p>
+
+            <div class="sql-presets">
+                <button class="preset-btn active" data-query="q1">SELECT * FROM Students;</button>
+                <button class="preset-btn" data-query="q2">SELECT * FROM Students WHERE Age >= 16;</button>
+                <button class="preset-btn" data-query="q3">SELECT * FROM Students WHERE Class_ID = 2;</button>
+                <button class="preset-btn" data-query="q4">SELECT Students.Name, Grades.Mark FROM Students JOIN Grades ON Students.ID = Grades.Student_ID;</button>
+            </div>
+
+            <div class="audio-settings">
+                <div class="slider-item">
+                    <label for="synth-pitch">Сервер дыбыс реңкі:</label>
+                    <input type="range" id="synth-pitch" min="60" max="220" value="95">
+                </div>
+            </div>
+
+            <button id="run-sql-btn" class="btn btn-cyber">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                <span>Сұранысты орындау (SQL Run)</span>
+            </button>
+        </div>
+
+        <!-- Theory Cards -->
+        <div class="glass-card theory-card">
+            <h3 class="card-title">Мәліметтер Базасы Теориясы</h3>
+
+            <div class="theory-tabs">
+                <button class="tab-btn active" data-tab="t-rel">Реляциялық ДҚ</button>
+                <button class="tab-btn" data-tab="t-elements">Құрылымы</button>
+                <button class="tab-btn" data-tab="t-keys">Кілттер (Keys)</button>
+            </div>
+
+            <div class="theory-body">
+                <!-- Relational DB -->
+                <div id="t-rel" class="theory-pane active">
+                    <p class="pane-desc"><strong>Реляциялық деректер қоры (Relational Database)</strong> — өзара байланысқан кестелер жиынтығы арқылы құрылған жүйе. Қазіргі кезде ең көп таралған деректер моделі.</p>
+                    <div class="theory-details">
+                        <h4>Артықшылықтары:</h4>
+                        <ul>
+                            <li>Деректердің тұтастығы мен дұрыстығын қамтамасыз етеді.</li>
+                            <li>Кестелер байланысы арқылы іздеу жылдамдығы жоғары.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Structure Elements -->
+                <div id="t-elements" class="theory-pane">
+                    <p class="pane-desc">Реляциялық кестенің негізгі екі элементі оқулық бойынша келесідей аталады:</p>
+                    <div class="theory-details">
+                        <ul>
+                            <li><strong>Өріс (Field / Баған)</strong>: Нысанның жекелеген сипаттамасы немесе қасиеті (мысалы: <i>Аты-жөні</i>, <i>Жасы</i>).</li>
+                            <li><strong>Жазба (Record / Жол)</strong>: Бір нысан туралы толық мәліметтер жиынтығы (мысалы, белгілі бір оқушының ID-і, аты және жасы орналасқан тұтас жол).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Keys -->
+                <div id="t-keys" class="theory-pane">
+                    <p class="pane-desc">Кестелердегі байланысты орнату және жазбаны бірегей түрде анықтау үшін кілттер қолданылады:</p>
+                    <div class="theory-details">
+                        <ul>
+                            <li>🔑 <strong>Бастапқы кілт (Primary Key)</strong>: Жазбаны бірегей түрде анықтайтын қайталанбайтын өріс (мысалы, <i>ID</i>).</li>
+                            <li>🗝️ <strong>Сыртқы кілт (Foreign Key)</strong>: Бір кестенің жазбаларын екінші кестенің бастапқы кілтімен байланыстыруға арналған өріс.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Right Panel: 3D Viewport & Quiz -->
+    <section class="panel right-panel">
+        <!-- 3D Database Viewport Card -->
+        <div class="glass-card canvas-card" style="padding: 16px;">
+            <h3 class="card-title" style="margin: 8px 12px;">3D Деректер Қоры Схемасы</h3>
+
+            <div class="db-viewport">
+                <!-- Connections SVG overlay -->
+                <svg class="svg-connections" id="svg-conn">
+                    <path id="link-class-student" class="glowing-line" d="M 0 0 Q 0 0 0 0" fill="none" />
+                    <path id="link-student-grade" class="glowing-line-pink" d="M 0 0 Q 0 0 0 0" fill="none" />
+                </svg>
+
+                <div class="db-tables-container" id="db-container">
+                    <!-- Table 1: Classes -->
+                    <div class="db-table-card" id="table-classes">
+                        <div class="db-table-header">
+                            <span class="db-table-title">🏫 Сыныптар (Classes)</span>
+                            <span style="font-size:0.75rem; color:var(--foreground-muted);">Parent Table</span>
+                        </div>
+                        <table class="db-grid">
+                            <thead>
+                            <tr>
+                                <th>🔑 ID</th>
+                                <th>Сынып_Аты</th>
+                                <th>Кабинет</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr data-row="c1">
+                                <td class="pk-cell">1</td>
+                                <td>11 "А"</td>
+                                <td>302 каб</td>
+                            </tr>
+                            <tr data-row="c2">
+                                <td class="pk-cell">2</td>
+                                <td>11 "Б"</td>
+                                <td>305 каб</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Table 2: Students -->
+                    <div class="db-table-card" id="table-students">
+                        <div class="db-table-header">
+                            <span class="db-table-title">👤 Оқушылар (Students)</span>
+                            <span style="font-size:0.75rem; color:var(--foreground-muted);">Primary Table</span>
+                        </div>
+                        <table class="db-grid">
+                            <thead>
+                            <tr>
+                                <th>🔑 ID</th>
+                                <th>Аты_Жөні</th>
+                                <th>Жасы</th>
+                                <th>🗝️ Сынып_ID</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr data-row="s1" data-age="17" data-class="1">
+                                <td class="pk-student-cell">1</td>
+                                <td>Әлихан Серіков</td>
+                                <td>17</td>
+                                <td class="fk-class-cell">1</td>
+                            </tr>
+                            <tr data-row="s2" data-age="16" data-class="2">
+                                <td class="pk-student-cell">2</td>
+                                <td>Аружан Амангелді</td>
+                                <td>16</td>
+                                <td class="fk-class-cell">2</td>
+                            </tr>
+                            <tr data-row="s3" data-age="15" data-class="1">
+                                <td class="pk-student-cell">3</td>
+                                <td>Диас Мұратұлы</td>
+                                <td>15</td>
+                                <td class="fk-class-cell">1</td>
+                            </tr>
+                            <tr data-row="s4" data-age="17" data-class="2">
+                                <td class="pk-student-cell">4</td>
+                                <td>Мадина Есенбаева</td>
+                                <td>17</td>
+                                <td class="fk-class-cell">2</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Table 3: Grades -->
+                    <div class="db-table-card" id="table-grades">
+                        <div class="db-table-header">
+                            <span class="db-table-title">📝 Бағалар (Grades)</span>
+                            <span style="font-size:0.75rem; color:var(--foreground-muted);">Child Table</span>
+                        </div>
+                        <table class="db-grid">
+                            <thead>
+                            <tr>
+                                <th>🔑 ID</th>
+                                <th>🗝️ Оқушы_ID</th>
+                                <th>Пән</th>
+                                <th>Баға</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr data-row="g1" data-student="1">
+                                <td>1</td>
+                                <td class="fk-student-cell">1</td>
+                                <td>Информатика</td>
+                                <td style="color:var(--accent-cyan); font-weight:bold;">5</td>
+                            </tr>
+                            <tr data-row="g2" data-student="2">
+                                <td>2</td>
+                                <td class="fk-student-cell">2</td>
+                                <td>Информатика</td>
+                                <td style="color:var(--warning); font-weight:bold;">4</td>
+                            </tr>
+                            <tr data-row="g3" data-student="3">
+                                <td>3</td>
+                                <td class="fk-student-cell">3</td>
+                                <td>Информатика</td>
+                                <td style="color:var(--accent-cyan); font-weight:bold;">5</td>
+                            </tr>
+                            <tr data-row="g4" data-student="4">
+                                <td>4</td>
+                                <td class="fk-student-cell">4</td>
+                                <td>Информатика</td>
+                                <td style="color:var(--error); font-weight:bold;">3</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live logs -->
+            <div id="terminal-output" class="terminal-log">
+                [SYSTEM] Деректер базасы жүйесі жүктелді. Күтуде...
+            </div>
+
+            <!-- SQL Resultset -->
+            <div id="resultset-card" class="glass-card sql-results-card hidden">
+                <h4 class="db-table-title" style="color:var(--accent-cyan); font-size:0.9rem; margin-bottom:8px;">
+                    📊 RESULT SET (Сұраныс нәтижесі)
+                </h4>
+                <div id="resultset-table-wrapper">
+                    <!-- Output rows -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Database ҰБТ Quiz Challenge -->
+        <div class="glass-card quiz-card">
+            <div class="quiz-header">
+                <h3 class="quiz-title">ҰБТ Информатика: Деректер Қоры</h3>
+                <div class="quiz-score">Ұпай: <span id="q-score">0</span> / <span id="q-total">0</span></div>
+            </div>
+            <div class="quiz-bar">
+                <div id="q-progress" class="quiz-bar-fill"></div>
+            </div>
+            <div class="quiz-body" id="quiz-question-wrapper">
+                <!-- Injected questions -->
+            </div>
+            <div class="quiz-actions">
+                <button id="next-q-btn" class="btn btn-cyber hidden" style="padding: 10px 20px;">Келесі сұрақ</button>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- Footer -->
+<footer class="app-footer">
+    <p>© 2026 INFO__UBT. ҰБТ Информатика дайындық платформасы. Барлық құқықтар қорғалған.</p>
+</footer>
+
+<!-- GSAP library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script>
+    // State Management
+    let audioCtx = null;
+    let masterGain = null;
+    let filterNode = null;
+    let synthOscillators = [];
+    let isMuted = false;
+    let audioInitialized = false;
+
+    let activeQuery = 'q1';
+    let queryInProgress = false;
+
+    function logTerminal(message) {
+        const terminal = document.getElementById('terminal-output');
+        if (terminal) {
+            const time = new Date().toLocaleTimeString();
+            terminal.innerHTML += `<br>[${time}] ${message}`;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+    }
+
+    // Quiz Questions Database based on Informatics textbook (grades 9-11)
+    const quizQuestions = [
+        {
+            q: "Кесте түрінде ұйымдастырылған және өзара байланысқан деректер жиынтығы қалай аталады?",
+            options: [
+                "Иерархиялық деректер қоры",
+                "Желілік деректер қоры",
+                "Реляциялық деректер қоры",
+                "Құжаттық деректер қоры"
+            ],
+            correct: 2,
+            hint: "Мәліметтер ортақ өрістер арқылы байланысатын кестелер түрінде сақталады."
+        },
+        {
+            q: "Реляциялық кестенің Бағаны (Столбец) қалай аталады?",
+            options: ["Жазба (Record)", "Өріс (Field)", "Ұяшық (Cell)", "Бастапқы кілт"],
+            correct: 1,
+            hint: "Баған белгілі бір қасиет сипатын білдіреді (мысалы, оқушының жасы)."
+        },
+        {
+            q: "Кестедегі жазбаны (Жолды) бірегей түрде анықтайтын және ешқашан қайталанбайтын өріс?",
+            options: ["Сыртқы кілт (Foreign Key)", "Сұраныс (Query)", "Бастапқы кілт (Primary Key)", "Интегралды кілт"],
+            correct: 2,
+            hint: "Бұл өріске мысал ретінде оқушының ID нөмірін немесе ЖСН (ИИН) алуға болады."
+        },
+        {
+            q: "Деректер қорында белгілі бір шарттарға сәйкес келетін ақпаратты сүзгіден өткізіп алуға арналған объект қалай аталады?",
+            options: ["Форма", "Кесте", "Сұраныс (Query)", "Есеп (Report)"],
+            correct: 2,
+            hint: "SQL тілінде бұл әрекет SELECT командасы арқылы жасалады."
+        },
+        {
+            q: "SQL тілінде кестеге жаңа жазба (жол) қосу үшін қолданылатын оператор?",
+            options: ["INSERT INTO", "SELECT FROM", "UPDATE SET", "DELETE FROM"],
+            correct: 0,
+            hint: "Деректер қорына жаңа мәліметтер енгізу (ендіру) мағынасын білдіреді."
+        }
+    ];
+
+    let quizScore = 0;
+    let quizIndex = 0;
+
+    // AUDIO ENGINE (Web Audio API Synthesizer)
+    function initAudio() {
+        if (audioInitialized) return;
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContextClass();
+
+            masterGain = audioCtx.createGain();
+            masterGain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+
+            filterNode = audioCtx.createBiquadFilter();
+            filterNode.type = 'lowpass';
+            filterNode.Q.setValueAtTime(1.8, audioCtx.currentTime);
+            filterNode.frequency.setValueAtTime(300, audioCtx.currentTime);
+
+            filterNode.connect(masterGain);
+            masterGain.connect(audioCtx.destination);
+
+            startCyberHum();
+            startFilterModulation();
+            audioInitialized = true;
+        } catch (e) {
+            console.error("Audio API initialization error:", e);
+        }
+    }
+
+    function startCyberHum() {
+        const rootFreq = parseFloat(document.getElementById('synth-pitch').value) || 95;
+
+        const osc1 = audioCtx.createOscillator();
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(rootFreq / 2, audioCtx.currentTime);
+
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(rootFreq * 2 + 0.3, audioCtx.currentTime);
+
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+
+        osc1.connect(oscGain);
+        osc2.connect(oscGain);
+        oscGain.connect(filterNode);
+
+        osc1.start();
+        osc2.start();
+
+        synthOscillators = [osc1, osc2];
+    }
+
+    function updateSynthFrequency(value) {
+        if (!audioCtx || synthOscillators.length < 2) return;
+        const rootFreq = parseFloat(value);
+        const now = audioCtx.currentTime;
+        synthOscillators[0].frequency.exponentialRampToValueAtTime(rootFreq / 2, now + 0.1);
+        synthOscillators[1].frequency.exponentialRampToValueAtTime(rootFreq * 2 + 0.3, now + 0.1);
+    }
+
+    function startFilterModulation() {
+        const lfo = audioCtx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(0.04, audioCtx.currentTime);
+
+        const lfoGain = audioCtx.createGain();
+        lfoGain.gain.setValueAtTime(120, audioCtx.currentTime);
+
+        lfo.connect(lfoGain);
+        lfoGain.connect(filterNode.frequency);
+        lfo.start();
+    }
+
+    function playBeep(freq = 600, duration = 0.08) {
+        if (!audioCtx || isMuted) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(now + duration + 0.01);
+    }
+
+    function playSuccessSound() {
+        if (!audioCtx || isMuted) return;
+        const now = audioCtx.currentTime;
+        const notes = [329.63, 415.30, 493.88, 659.25];
+
+        notes.forEach((note, idx) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(note, now + idx * 0.06);
+            gain.gain.setValueAtTime(0.05, now + idx * 0.06);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.3);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now + idx * 0.06);
+            osc.stop(now + idx * 0.06 + 0.31);
+        });
+    }
+
+    function playErrorSound() {
+        if (!audioCtx || isMuted) return;
+        const now = audioCtx.currentTime;
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(90, now);
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(92, now);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc1.start();
+        osc2.start();
+        osc1.stop(now + 0.36);
+        osc2.stop(now + 0.36);
+    }
+
+    function playCollisionGlitch() {
+        if (!audioCtx || isMuted) return;
+        const now = audioCtx.currentTime;
+
+        const bufferSize = audioCtx.sampleRate * 0.35;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        const noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = buffer;
+
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(1000, now);
+        noiseFilter.frequency.exponentialRampToValueAtTime(120, now + 0.3);
+
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0.2, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+        noiseNode.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+
+        const osc = audioCtx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.linearRampToValueAtTime(30, now + 0.3);
+
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.setValueAtTime(0.15, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+        osc.connect(oscGain);
+        oscGain.connect(audioCtx.destination);
+
+        noiseNode.start();
+        osc.start();
+        noiseNode.stop(now + 0.36);
+        osc.stop(now + 0.36);
+    }
+
+    function playSweepSound() {
+        if (!audioCtx || isMuted) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(100, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.5);
+
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(now + 0.51);
+    }
+
+    function toggleMute() {
+        if (!masterGain) return;
+        isMuted = !isMuted;
+        const volOn = document.getElementById('vol-on');
+        const volOff = document.getElementById('vol-off');
+
+        if (isMuted) {
+            masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+            volOn.classList.add('hidden');
+            volOff.classList.remove('hidden');
+        } else {
+            masterGain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+            volOn.classList.remove('hidden');
+            volOff.classList.add('hidden');
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // 3D VIEWPORT & TILT EFFECTS
+    // -----------------------------------------------------------------
+    function init3dParallax() {
+        const viewport = document.querySelector('.db-viewport');
+        const dbContainer = document.getElementById('db-container');
+
+        viewport.addEventListener('mousemove', (e) => {
+            const rect = viewport.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const xPercent = x / rect.width;
+            const yPercent = y / rect.height;
+
+            const rotateY = -15 + xPercent * 20;
+            const rotateX = 30 - yPercent * 20;
+
+            dbContainer.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+            drawConnectionLines();
+        });
+
+        viewport.addEventListener('mouseleave', () => {
+            dbContainer.style.transform = 'rotateX(20deg) rotateY(-5deg)';
+            setTimeout(drawConnectionLines, 150);
+        });
+
+        setTimeout(drawConnectionLines, 800);
+    }
+
+    function drawConnectionLines() {
+        const svg = document.getElementById('svg-conn');
+        if (!svg) return;
+        const viewportRect = svg.getBoundingClientRect();
+
+        const pkClass = document.querySelector('#table-classes tbody tr:nth-child(1) .pk-cell');
+        const fkClass = document.querySelector('#table-students tbody tr:nth-child(1) .fk-class-cell');
+
+        if (pkClass && fkClass) {
+            const r1 = pkClass.getBoundingClientRect();
+            const r2 = fkClass.getBoundingClientRect();
+
+            const startX = r1.right - viewportRect.left;
+            const startY = r1.top + r1.height / 2 - viewportRect.top;
+            const endX = r2.left - viewportRect.left;
+            const endY = r2.top + r2.height / 2 - viewportRect.top;
+
+            const cpX = (startX + endX) / 2 - 40;
+            const cpY = (startY + endY) / 2;
+
+            document.getElementById('link-class-student').setAttribute('d', `M ${startX} ${startY} Q ${cpX} ${cpY} ${endX} ${endY}`);
+        }
+
+        const pkStudent = document.querySelector('#table-students tbody tr:nth-child(1) .pk-student-cell');
+        const fkStudent = document.querySelector('#table-grades tbody tr:nth-child(1) .fk-student-cell');
+
+        if (pkStudent && fkStudent) {
+            const r1 = pkStudent.getBoundingClientRect();
+            const r2 = fkStudent.getBoundingClientRect();
+
+            const startX = r1.right - viewportRect.left;
+            const startY = r1.top + r1.height / 2 - viewportRect.top;
+            const endX = r2.left - viewportRect.left;
+            const endY = r2.top + r2.height / 2 - viewportRect.top;
+
+            const cpX = (startX + endX) / 2 + 40;
+            const cpY = (startY + endY) / 2;
+
+            document.getElementById('link-student-grade').setAttribute('d', `M ${startX} ${startY} Q ${cpX} ${cpY} ${endX} ${endY}`);
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // SQL PLAYGROUND & ROW SELECTOR SIMULATION
+    // -----------------------------------------------------------------
+    function initSqlPlayground() {
+        const presets = document.querySelectorAll('.preset-btn');
+        presets.forEach(btn => {
+            btn.addEventListener('click', () => {
+                presets.forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                activeQuery = btn.getAttribute('data-query');
+                playClickSound();
+            });
+        });
+
+        document.getElementById('run-sql-btn').addEventListener('click', () => {
+            runQuery();
+        });
+    }
+
+    function runQuery() {
+        if (queryInProgress) return;
+        initAudio();
+        queryInProgress = true;
+        playSweepSound();
+
+        document.querySelectorAll('.db-grid tr').forEach(r => r.classList.remove('row-selected'));
+
+        const resultsCard = document.getElementById('resultset-card');
+        const resultsWrapper = document.getElementById('resultset-table-wrapper');
+        resultsCard.classList.add('hidden');
+
+        let queryText = '';
+        let rowsToSelect = [];
+        let resultHeaders = [];
+        let resultData = [];
+
+        if (activeQuery === 'q1') {
+            queryText = 'SELECT * FROM Students;';
+            rowsToSelect = ['s1', 's2', 's3', 's4'];
+            resultHeaders = ['ID', 'Аты_Жөні', 'Жасы', 'Сынып_ID'];
+            resultData = [
+                [1, 'Әлихан Серіков', 17, 1],
+                [2, 'Аружан Амангелді', 16, 2],
+                [3, 'Диас Мұратұлы', 15, 1],
+                [4, 'Мадина Есенбаева', 17, 2]
+            ];
+        }
+        else if (activeQuery === 'q2') {
+            queryText = 'SELECT * FROM Students WHERE Age >= 16;';
+            rowsToSelect = ['s1', 's2', 's4'];
+            resultHeaders = ['ID', 'Аты_Жөні', 'Жасы', 'Сынып_ID'];
+            resultData = [
+                [1, 'Әлихан Серіков', 17, 1],
+                [2, 'Аружан Амангелді', 16, 2],
+                [4, 'Мадина Есенбаева', 17, 2]
+            ];
+        }
+        else if (activeQuery === 'q3') {
+            queryText = 'SELECT * FROM Students WHERE Class_ID = 2;';
+            rowsToSelect = ['s2', 's4'];
+            resultHeaders = ['ID', 'Аты_Жөні', 'Жасы', 'Сынып_ID'];
+            resultData = [
+                [2, 'Аружан Амангелді', 16, 2],
+                [4, 'Мадина Есенбаева', 17, 2]
+            ];
+        }
+        else if (activeQuery === 'q4') {
+            queryText = 'SELECT Students.Name, Grades.Mark FROM Students JOIN Grades ON Students.ID = Grades.Student_ID;';
+            rowsToSelect = ['s1', 's2', 's3', 's4', 'g1', 'g2', 'g3', 'g4'];
+            resultHeaders = ['Аты_Жөні', 'Пән', 'Баға'];
+            resultData = [
+                ['Әлихан Серіков', 'Информатика', 5],
+                ['Аружан Амангелді', 'Информатика', 4],
+                ['Диас Мұратұлы', 'Информатика', 5],
+                ['Мадина Есенбаева', 'Информатика', 3]
+            ];
+        }
+
+        logTerminal(`[SQL] Сұраныс жіберілуде: <span style="color:var(--accent-cyan); font-weight:bold;">${queryText}</span>`);
+
+        setTimeout(() => {
+            rowsToSelect.forEach(r => {
+                const el = document.querySelector(`tr[data-row="${r}"]`);
+                if (el) {
+                    el.classList.add('row-selected');
+                    gsap.fromTo(el,
+                        { transform: 'translateZ(0px)', backgroundColor: 'rgba(6, 182, 212, 0)' },
+                        { transform: 'translateZ(12px)', backgroundColor: 'rgba(6, 182, 212, 0.15)', duration: 0.3 }
+                    );
+                }
+            });
+
+            playBeep(450, 0.07);
+            logTerminal(`[SQL] Іздеу аяқталды. ${resultData.length} жазба табылды...`);
+        }, 600);
+
+        setTimeout(() => {
+            resultsWrapper.innerHTML = `
+                    <table class="db-grid">
+                        <thead>
+                            <tr>
+                                ${resultHeaders.map(h => `<th>${h}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${resultData.map(row => `
+                                <tr>
+                                    ${row.map(cell => `<td>${cell}</td>`).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+
+            resultsCard.classList.remove('hidden');
+            gsap.fromTo(resultsCard, { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: 0.4 });
+            playSuccessSound();
+            logTerminal(`[SYSTEM] Сұраныс нәтижесі орындалды.`);
+            queryInProgress = false;
+        }, 1200);
+    }
+
+    // -----------------------------------------------------------------
+    // THEORY TAB INTERACTION
+    // -----------------------------------------------------------------
+    function initTheoryTabs() {
+        const tabs = document.querySelectorAll('.tab-btn');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.theory-pane').forEach(p => p.classList.remove('active'));
+
+                tab.classList.add('active');
+                const pane = document.getElementById(tab.getAttribute('data-tab'));
+                pane.classList.add('active');
+                playClickSound();
+            });
+        });
+    }
+
+    // -----------------------------------------------------------------
+    // ҰБТ QUIZ CHALLENGE
+    // -----------------------------------------------------------------
+    function initQuiz() {
+        renderQuizQuestion();
+        document.getElementById('next-q-btn').addEventListener('click', () => {
+            playClickSound();
+            quizIndex++;
+            if (quizIndex < quizQuestions.length) {
+                renderQuizQuestion();
+            } else {
+                showQuizResults();
+            }
+        });
+    }
+
+    function renderQuizQuestion() {
+        const qData = quizQuestions[quizIndex];
+        const container = document.getElementById('quiz-question-wrapper');
+        const totalVal = document.getElementById('q-total');
+        const progress = document.getElementById('q-progress');
+        const nextBtn = document.getElementById('next-q-btn');
+
+        nextBtn.classList.add('hidden');
+        totalVal.innerText = quizQuestions.length;
+        progress.style.width = `${(quizIndex / quizQuestions.length) * 100}%`;
+
+        container.innerHTML = `
+                <div class="q-text">${quizIndex + 1}. ${qData.q}</div>
+                <div class="options-list">
+                    ${qData.options.map((opt, idx) => `
+                        <button class="opt-btn" data-idx="${idx}">${opt}</button>
+                    `).join('')}
+                </div>
+                <p id="quiz-hint" style="font-size: 0.8rem; color: var(--accent-cyan); margin-top: 14px; opacity: 0; transition: opacity 0.5s ease;">
+                    Көмек: ${qData.hint}
+                </p>
+            `;
+
+        const btns = container.querySelectorAll('.opt-btn');
+        btns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const selectedIdx = parseInt(btn.getAttribute('data-idx'));
+                handleOptionSelect(selectedIdx, btn, btns);
+            });
+        });
+    }
+
+    function handleOptionSelect(idx, selectedBtn, allBtns) {
+        const qData = quizQuestions[quizIndex];
+        const correctIdx = qData.correct;
+        const nextBtn = document.getElementById('next-q-btn');
+
+        allBtns.forEach(btn => {
+            btn.classList.add('disabled');
+            const btnIdx = parseInt(btn.getAttribute('data-idx'));
+            if (btnIdx === correctIdx) {
+                btn.classList.add('correct');
+            }
+        });
+
+        if (idx === correctIdx) {
+            selectedBtn.classList.add('correct');
+            quizScore++;
+            document.getElementById('q-score').innerText = quizScore;
+            playSuccessSound();
+        } else {
+            selectedBtn.classList.add('incorrect');
+            const hint = document.getElementById('quiz-hint');
+            if (hint) hint.style.opacity = 1;
+            playErrorSound();
+        }
+
+        nextBtn.classList.remove('hidden');
+    }
+
+    function showQuizResults() {
+        const container = document.getElementById('quiz-question-wrapper');
+        const progress = document.getElementById('q-progress');
+        progress.style.width = '100%';
+
+        let verdict = '';
+        if (quizScore === quizQuestions.length) {
+            verdict = "Керемет! ҰБТ Деректер қоры сұрақтарын 100% бағындырдыңыз! 🏆";
+        } else if (quizScore >= 3) {
+            verdict = "Жақсы көрсеткіш! Аздап қайталау қажет. 👍";
+        } else {
+            verdict = "Қайта тапсырып көріңіз. Сол жақ панельдегі теорияны оқыңыз. 📚";
+        }
+
+        container.innerHTML = `
+                <div style="text-align:center; padding: 20px 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trophy" style="color:var(--accent-cyan); margin-bottom: 12px;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"/><path d="M12 2a6 6 0 0 0-6 6v5a6 6 0 0 0 12 0V8a6 6 0 0 0-6-6z"/></svg>
+                    <h3 class="card-title" style="font-size: 1.4rem; border-left:none;">Сынақ аяқталды!</h3>
+                    <p style="font-size: 1.15rem; color: var(--accent-cyan); margin-bottom: 6px;">Ұпайыңыз: ${quizScore} / ${quizQuestions.length}</p>
+                    <p class="pane-desc">${verdict}</p>
+                    <button id="restart-q-btn" class="btn btn-outline" style="margin-top: 10px;">Қайта тапсыру</button>
+                </div>
+            `;
+
+        document.getElementById('restart-q-btn').addEventListener('click', () => {
+            playClickSound();
+            quizScore = 0;
+            quizIndex = 0;
+            document.getElementById('q-score').innerText = '0';
+            renderQuizQuestion();
+        });
+    }
+
+    function playClickSound() {
+        playBeep(800, 0.05);
+    }
+
+    // -----------------------------------------------------------------
+    // GLOBAL APP INITIALIZATION
+    // -----------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', () => {
+        const enterBtn = document.getElementById('enter-btn');
+        const overlay = document.getElementById('intro-overlay');
+
+        enterBtn.addEventListener('click', () => {
+            initAudio();
+            if (audioCtx) playSuccessSound();
+
+            gsap.to(overlay, {
+                opacity: 0,
+                duration: 0.8,
+                ease: 'power2.out',
+                onComplete: () => {
+                    overlay.classList.add('hidden');
+
+                    init3dParallax();
+                    initSqlPlayground();
+                    initTheoryTabs();
+                    initQuiz();
+
+                    gsap.from('.app-header', { y: -50, opacity: 0, duration: 0.8, ease: 'power3.out' });
+                    gsap.from('.left-panel', { x: -80, opacity: 0, duration: 0.8, ease: 'power3.out' });
+                    gsap.from('.right-panel', { x: 80, opacity: 0, duration: 0.8, ease: 'power3.out' });
+                }
+            });
+        });
+
+        document.getElementById('mute-btn').addEventListener('click', () => {
+            toggleMute();
+        });
+
+        const copyBtn = document.getElementById('copy-code-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                playClickSound();
+                fetch(window.location.href)
+                    .then(res => res.text())
+                    .then(text => {
+                        navigator.clipboard.writeText(text).then(() => {
+                            const span = copyBtn.querySelector('span');
+                            const originalText = span.innerText;
+                            span.innerText = 'Көшірілді!';
+                            copyBtn.style.borderColor = 'var(--success)';
+                            copyBtn.style.color = 'var(--success)';
+                            logTerminal('[SYSTEM] Веб-сайттың толық коды алмасу буферіне көшірілді.');
+                            setTimeout(() => {
+                                span.innerText = originalText;
+                                copyBtn.style.borderColor = '';
+                                copyBtn.style.color = '';
+                            }, 2000);
+                        });
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy code: ', err);
+                        logTerminal('[ERROR] Кодты көшіру сәтсіз аяқталды.');
+                    });
+            });
+        }
+
+        document.getElementById('synth-pitch').addEventListener('input', (e) => {
+            updateSynthFrequency(e.target.value);
+        });
+    });
+</script>
+</body>
+</html>
